@@ -1,0 +1,10 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">Notes on %h</name>
+  <service protocol="ipv4">
+    <type>_http._tcp</type>
+    <port>5000</port>
+    <host-name>notes.local</host-name>
+  </service>
+</service-group>

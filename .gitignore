@@ -1,6 +1,9 @@
 **/.idea
 **/.git
 
+# Dependencies
+node_modules/
+
 # JSON files
 *.json
 

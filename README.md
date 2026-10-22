@@ -66,6 +66,71 @@ Then install required packages from requirements.txt
 sudo python3 -m pip install -r requirements.txt
 ```
 
+### How the web UI is served
+
+The Flask web UI is started by the MagicMirror `node_helper` itself. No extra
+daemon, pm2 entry or systemd service is installed by this module.
+
+* Before spawning the process the module checks whether something is already
+  listening on `host:port`. If it is, it logs
+  `Web UI is already served ... skipping own start.` and leaves the running
+  instance alone — the UI stays reachable instead of dying on
+  `Address already in use`.
+* On every MagicMirror shutdown/restart the helper stops its Flask process
+  again (`Stopping web UI process ...`), so it cannot outlive the mirror and
+  block the port on the next start.
+
+> **Coming from a version that installed the UI as a pm2 service?** Remove the
+> leftover entry once, otherwise it keeps fighting over the port:
+> ```
+> pm2 delete fastnotes && pm2 save
+> ```
+
+### Optional: open the UI as `http://notes.local:5000`
+
+Publishing an mDNS name means writing to `/etc/avahi/hosts` and
+`/etc/avahi/services/`, so it needs root — `npm install` runs as your normal
+user and cannot do it silently. The setup script therefore does it for you as
+soon as it can get root:
+
+```bash
+cd ~/MagicMirror/modules/MMM-FastNotes
+sudo ./scripts/setup.sh
+```
+
+What that does (all of it is idempotent, safe to run again at any time):
+
+1. Installs `scripts/notes.service` → `/etc/avahi/services/notes.service`
+   (announces the `_http._tcp` service on port 5000).
+2. Installs `scripts/avahi-notes-dispatcher` →
+   `/etc/NetworkManager/dispatcher.d/50-avahi-notes`.
+3. Runs that dispatcher once, which writes
+   `<current-ip> notes.local` into `/etc/avahi/hosts` and restarts
+   `avahi-daemon` (a SIGHUP is not enough — avahi only reloads service files
+   then, not host aliases).
+
+The dispatcher also runs automatically whenever NetworkManager gets or renews
+an address, so **the name follows DHCP changes on its own** — no static IP
+needed. Verify it with:
+
+```bash
+getent ahosts notes.local        # → your current IP
+curl -I http://notes.local:5000/ # → HTTP/1.1 200 OK
+```
+
+**If you cannot or do not want to use sudo**, add the line manually instead
+(replace the IP with your mirror's current address):
+
+```bash
+echo "192.168.178.36 notes.local" | sudo tee -a /etc/avahi/hosts
+sudo systemctl restart avahi-daemon
+```
+
+Note: mDNS (`.local`) is resolved by Bonjour/mDNS-capable clients (Linux,
+macOS, Windows with Bonjour, iOS). If a device on your network cannot open
+`notes.local:5000`, either add the same line to that device's hosts file or
+create a DNS name in your router — the fallback is always the plain IP.
+
 ### Configuration
 Here is example of config, that must be placed in *config.js* file in array *modules*
 ```markdown
