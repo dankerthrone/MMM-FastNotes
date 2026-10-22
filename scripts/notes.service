@@ -1,10 +1,17 @@
 <?xml version="1.0" standalone='no'?>
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  Advertises the FastNotes web UI via DNS-SD on port 5000.
+
+  Deliberately no <host-name> element: Avahi then uses the machine's system
+  hostname, which is the only local name it publishes for this address.
+  Hardcoding an alias here would leave the advertised service pointing at a
+  name that does not resolve ("Local name collision").
+-->
 <service-group>
   <name replace-wildcards="yes">Notes on %h</name>
   <service protocol="ipv4">
     <type>_http._tcp</type>
     <port>5000</port>
-    <host-name>notes.local</host-name>
   </service>
 </service-group>

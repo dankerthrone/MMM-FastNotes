@@ -86,50 +86,54 @@ daemon, pm2 entry or systemd service is installed by this module.
 > pm2 delete fastnotes && pm2 save
 > ```
 
-### Optional: open the UI as `http://notes.local:5000`
+### Choosing a name for the web UI
 
-Publishing an mDNS name means writing to `/etc/avahi/hosts` and
-`/etc/avahi/services/`, so it needs root — `npm install` runs as your normal
-user and cannot do it silently. The setup script therefore does it for you as
-soon as it can get root:
+The web UI is reachable by IP straight away:
 
-```bash
-cd ~/MagicMirror/modules/MMM-FastNotes
-sudo ./scripts/setup.sh
+```
+http://<mirror-ip>:5000
 ```
 
-What that does (all of it is idempotent, safe to run again at any time):
+For a name you have exactly **one** usable option per address — there is no
+config workaround around it:
 
-1. Installs `scripts/notes.service` → `/etc/avahi/services/notes.service`
-   (announces the `_http._tcp` service on port 5000).
-2. Installs `scripts/avahi-notes-dispatcher` →
-   `/etc/NetworkManager/dispatcher.d/50-avahi-notes`.
-3. Runs that dispatcher once, which writes
-   `<current-ip> notes.local` into `/etc/avahi/hosts` and restarts
-   `avahi-daemon` (a SIGHUP is not enough — avahi only reloads service files
-   then, not host aliases).
+* **System hostname (recommended).** Avahi publishes `$(hostname).local` for
+  this machine's IP all by itself, it always matches the current address.
+  Verify with `getent ahosts $(hostname).local`. Want another name? Change it
+  once:
 
-The dispatcher also runs automatically whenever NetworkManager gets or renews
-an address, so **the name follows DHCP changes on its own** — no static IP
-needed. Verify it with:
+  ```bash
+  sudo hostnamectl set-hostname notes      # -> http://notes.local:5000
+  ```
 
-```bash
-getent ahosts notes.local        # → your current IP
-curl -I http://notes.local:5000/ # → HTTP/1.1 200 OK
-```
+  The name follows every DHCP change automatically, there is nothing to
+  maintain. The DNS-SD service installed by the setup script follows the
+  hostname as well, so `Notes on <hostname>` stays correct.
 
-**If you cannot or do not want to use sudo**, add the line manually instead
-(replace the IP with your mirror's current address):
+* **Do NOT add an alias via `/etc/avahi/hosts`.** Avahi owns one local name per
+  address and rejects a second one, so such an alias never resolves and you get
+  this on every avahi start instead:
 
-```bash
-echo "192.168.178.36 notes.local" | sudo tee -a /etc/avahi/hosts
-sudo systemctl restart avahi-daemon
-```
+  ```
+  Static host name notes.local: avahi_server_add_address failure: Local name collision
+  ```
 
-Note: mDNS (`.local`) is resolved by Bonjour/mDNS-capable clients (Linux,
-macOS, Windows with Bonjour, iOS). If a device on your network cannot open
-`notes.local:5000`, either add the same line to that device's hosts file or
-create a DNS name in your router — the fallback is always the plain IP.
+  An earlier version of this setup script tried exactly that. Running it again
+  removes the leftover entry from `/etc/avahi/hosts` plus the dispatcher script
+  that used to rewrite it on every DHCP event, and installs the DNS-SD service
+  without a hardcoded `<host-name>`:
+
+  ```bash
+  cd ~/MagicMirror/modules/MMM-FastNotes
+  sudo ./scripts/setup.sh
+  ```
+
+**Checking from a client device:** open `http://<mirror-ip>:5000` first. If that
+works but a `.local` name does not, the client does not do mDNS — common with
+Android browsers and on Windows without Bonjour installed. Use the IP there, or
+create a DNS name in your router. mDNS-capable clients (Linux, macOS, iOS,
+Windows with Bonjour) resolve the system hostname without any extra step.
+
 
 ### Configuration
 Here is example of config, that must be placed in *config.js* file in array *modules*
