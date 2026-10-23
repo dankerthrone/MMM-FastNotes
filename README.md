@@ -34,105 +34,68 @@ Little speed up for screenrecord
 * Open **host:port** provided in config.js and enjoy
 
 ### Dependencies
-* [MagicMirror](https://github.com/MichMich/MagicMirror)
-* [python-shell](https://www.npmjs.com/package/python-shell)
-* [sqlite3](http://npmjs.com/package/sqlite3)
-* Python 3.6 or higher
+
+* [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror) (v2.16.0 or higher)
+* [Node.js](https://nodejs.org/) (v16 or higher) & npm
+* Python 3.8 or higher
+* npm packages: [python-shell](https://www.npmjs.com/package/python-shell), [sqlite3](https://www.npmjs.com/package/sqlite3)
 
 ### Installation
-Navigate into your MagicMirror's modules folder
-```markdown
+
+Navigate into your MagicMirror's modules folder:
+
+```bash
 cd ~/MagicMirror/modules
 ```
 
 Clone this module repository:
 ```markdown
 git clone https://github.com/polarbearjngl/MMM-FastNotes.git
-```
+cd MMM-FastNotes
+``` 
 
-Navigate to the new MMM-FastNotes folder and install the npm **python-shell** dependency
+Install the required node.js **python-shell** and **sqlite** dependencies
 ```markdown
-npm install python-shell
-npm install sqlite3
+npm install python-shell sqlite3
 ```
 
-Check that you have installed **Python 3.6 or higher** on your Raspberry. Just write in console `python3`, and if it exists, you will see python terminal. If not, you need to install it with this line
-```markdown
-sudo apt-get install python3
+#### Set up the Python environment:
+
+Create a virtual environment (avoids conflict with system Python / PEP 668): 
 ```
-
-Then install required packages from requirements.txt
-```markdown
-sudo python3 -m pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
 ```
+If you don't use bash, look up how to source the venv with your specific shell. However, on a typical MM you shouldn't be using anything but bash ;) 
 
-### How the web UI is served
-
-The Flask web UI is started by the MagicMirror `node_helper` itself. No extra
-daemon, pm2 entry or systemd service is installed by this module.
-
-* Before spawning the process the module checks whether something is already
-  listening on `host:port`. If it is, it logs
-  `Web UI is already served ... skipping own start.` and leaves the running
-  instance alone — the UI stays reachable instead of dying on
-  `Address already in use`.
-* On every MagicMirror shutdown/restart the helper stops its Flask process
-  again (`Stopping web UI process ...`), so it cannot outlive the mirror and
-  block the port on the next start.
-
-> **Coming from a version that installed the UI as a pm2 service?** Remove the
-> leftover entry once, otherwise it keeps fighting over the port:
-> ```
-> pm2 delete fastnotes && pm2 save
-> ```
-
-### Choosing a name for the web UI
-
-The web UI is reachable by IP straight away:
+Install the Python requirements:
 
 ```
-http://<mirror-ip>:5000
+pip install -r requirements.txt 
+```
+    Important: If node_helper.js calls Python directly, update the path to use your virtual environment:
+
+    // In node_helper.js, replace "python3" with:
+    const pythonPath = __dirname + '/.venv/bin/python3';
+
+
+Leave the venv with 
+```
+deactivate
 ```
 
-For a name you have exactly **one** usable option per address — there is no
-config workaround around it:
+Verify Python 3 (usually pre-installed):
 
-* **System hostname (recommended).** Avahi publishes `$(hostname).local` for
-  this machine's IP all by itself, it always matches the current address.
-  Verify with `getent ahosts $(hostname).local`. Want another name? Change it
-  once:
+```
+python3 --version
+```
 
-  ```bash
-  sudo hostnamectl set-hostname notes      # -> http://notes.local:5000
-  ```
+If Python 3 is missing, install it via your package manager:
 
-  The name follows every DHCP change automatically, there is nothing to
-  maintain. The DNS-SD service installed by the setup script follows the
-  hostname as well, so `Notes on <hostname>` stays correct.
-
-* **Do NOT add an alias via `/etc/avahi/hosts`.** Avahi owns one local name per
-  address and rejects a second one, so such an alias never resolves and you get
-  this on every avahi start instead:
-
-  ```
-  Static host name notes.local: avahi_server_add_address failure: Local name collision
-  ```
-
-  An earlier version of this setup script tried exactly that. Running it again
-  removes the leftover entry from `/etc/avahi/hosts` plus the dispatcher script
-  that used to rewrite it on every DHCP event, and installs the DNS-SD service
-  without a hardcoded `<host-name>`:
-
-  ```bash
-  cd ~/MagicMirror/modules/MMM-FastNotes
-  sudo ./scripts/setup.sh
-  ```
-
-**Checking from a client device:** open `http://<mirror-ip>:5000` first. If that
-works but a `.local` name does not, the client does not do mDNS — common with
-Android browsers and on Windows without Bonjour installed. Use the IP there, or
-create a DNS name in your router. mDNS-capable clients (Linux, macOS, iOS,
-Windows with Bonjour) resolve the system hostname without any extra step.
+*    Arch / CachyOS / Manjaro: sudo pacman -S python
+*    Debian / Ubuntu / Raspberry Pi OS: sudo apt install python3
+*    macOS: brew install python3
+*    Windows: python.org (add to PATH during install)
 
 
 ### Configuration
