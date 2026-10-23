@@ -1,6 +1,7 @@
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 const net = require("net");
+const os = require("os");
 const fs = require("fs");
 const path = require("path");
 const { PythonShell } = require("python-shell");
@@ -51,6 +52,19 @@ module.exports = NodeHelper.create({
       this.occupiedLogged = false;
       this.ensureServer();
 
+      // Tell the frontend which URL the QR code should point to. We encode the
+      // plain LAN IPv4, not <hostname>.local: mDNS resolution is unreliable
+      // across client OSes (and was the reason the QR feature exists).
+      if (this.config.QRCode) {
+        const ip = this.lanIPv4();
+        if (ip) {
+          const port = Number(this.config.port) || 5000;
+          this.sendSocketNotification("FAST_NOTES_URL", `http://${ip}:${port}`);
+        } else {
+          Log.warn("[MMM-FastNotes] QRCode is enabled but no LAN IPv4 address was found - skipping QR code.");
+        }
+      }
+
       // only ever keep one poll interval alive
       if (this.dbTimer) {
         clearInterval(this.dbTimer);
@@ -81,6 +95,44 @@ module.exports = NodeHelper.create({
       this.pyProcess.kill("SIGTERM");
     }
     this.pyProcess = null;
+  },
+
+  /*
+   * First non-internal IPv4 address of this machine, i.e. the address other
+   * LAN devices use to reach us. Returns null when there is none.
+   */
+  lanIPv4: function () {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const addr of interfaces[name] || []) {
+        if ((addr.family === "IPv4" || addr.family === 4) && !addr.internal) {
+          return addr.address;
+        }
+      }
+    }
+    return null;
+  },
+
+  /*
+   * Maps the configured host to the address we actually bind to.
+   *
+   * "0.0.0.0" (the default, "reachable from the LAN") becomes "::" when the
+   * system supports IPv6: a dual-stack socket then answers on IPv4 AND IPv6.
+   * That matters because mDNS resolves <hostname>.local to either address
+   * family depending on the client, and an IPv4-only bind makes the web UI
+   * unreachable for every client that happens to get the AAAA record.
+   * Falls back to plain "0.0.0.0" on hosts without IPv6.
+   */
+  resolveBindHost: function (host) {
+    if (host !== "0.0.0.0") {
+      return Promise.resolve(host);
+    }
+    return new Promise((resolve) => {
+      const probe = net.createServer()
+        .once("error", () => resolve("0.0.0.0"))
+        .once("listening", () => probe.close(() => resolve("::")))
+        .listen(0, "::");
+    });
   },
 
   /*
@@ -127,20 +179,22 @@ module.exports = NodeHelper.create({
     const host = this.config.host || "0.0.0.0";
     const port = Number(this.config.port) || 5000;
 
-    this.portInUse(port, host).then((busy) => {
-      if (busy) {
-        if (!this.occupiedLogged) {
-          Log.info(`[MMM-FastNotes] Web UI is already served on ${host}:${port}, skipping own start.`);
-          this.occupiedLogged = true;
+    this.resolveBindHost(host).then((bindHost) => {
+      this.portInUse(port, bindHost).then((busy) => {
+        if (busy) {
+          if (!this.occupiedLogged) {
+            Log.info(`[MMM-FastNotes] Web UI is already served on ${bindHost}:${port}, skipping own start.`);
+            this.occupiedLogged = true;
+          }
+          this.scheduleCheck(OCCUPIED_RECHECK_DELAY);
+          return;
         }
+        this.occupiedLogged = false;
+        this.spawnServer(bindHost, port);
+      }).catch((err) => {
+        Log.error(`[MMM-FastNotes] Port check for ${bindHost}:${port} failed: ${err}`);
         this.scheduleCheck(OCCUPIED_RECHECK_DELAY);
-        return;
-      }
-      this.occupiedLogged = false;
-      this.spawnServer(host, port);
-    }).catch((err) => {
-      Log.error(`[MMM-FastNotes] Port check for ${host}:${port} failed: ${err}`);
-      this.scheduleCheck(OCCUPIED_RECHECK_DELAY);
+      });
     });
   },
 
@@ -202,7 +256,8 @@ module.exports = NodeHelper.create({
       }
     });
 
-    Log.log(`[MMM-FastNotes] Started web UI on ${host}:${port}.`);
+    const where = host === "::" ? `${host}:${port} (dual-stack: IPv4 + IPv6)` : `${host}:${port}`;
+    Log.log(`[MMM-FastNotes] Started web UI on ${where}.`);
   },
 
   planRestart: function (host, port) {

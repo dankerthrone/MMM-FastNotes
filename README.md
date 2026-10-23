@@ -38,7 +38,7 @@ Little speed up for screenrecord
 * [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror) (v2.16.0 or higher)
 * [Node.js](https://nodejs.org/) (v20 or higher) & npm
 * Python 3.8 or higher
-* Node packages (installed automatically into this module folder): [python-shell](https://www.npmjs.com/package/python-shell), [sqlite3](https://www.npmjs.com/package/sqlite3)
+* Node packages (installed automatically into this module folder): [python-shell](https://www.npmjs.com/package/python-shell), [sqlite3](https://www.npmjs.com/package/sqlite3), [qr-code-styling](https://www.npmjs.com/package/qr-code-styling)
 
 ### Installation
 
@@ -121,6 +121,11 @@ your LAN can open it:
 * `http://<MIRROR_IP>:5000`
 * `http://<hostname>.local:5000` (needs a running `avahi-daemon` / mDNS)
 
+With `host: "0.0.0.0"` the module actually binds a dual-stack socket (`::`),
+so the UI answers on IPv4 **and** IPv6. That matters because mDNS may resolve
+`<hostname>.local` to either address family depending on the client - an
+IPv4-only bind would be unreachable for every client that got the AAAA record.
+
 **The form has no authentication.** Anyone on the same network can create,
 edit and delete notes. On a trusted home LAN that is usually fine, but be aware
 of it if your mirror is reachable beyond your LAN (port forwarding to the
@@ -141,7 +146,10 @@ config: {
     css: 0,               // 0 - current default MM CSS styles; 1 - custom css stile
     // TextStyle could be "xsmall bright" or "medium bright" or another one defined in /home/pi/MagicMirror/css/main.css, or in your own custom CSS
     nameTextStyle: "xsmall bright", // style for Note Name
-    contentTextStyle: "normal dimmed" // style for Note Content
+    contentTextStyle: "normal dimmed", // style for Note Content
+    coloredNotes: false,   // true: every note gets its own text color (Miyazaki-16 palette)
+    QRCode: false,         // true: show a QR code above the notes that points to the web UI
+    qrCodeSize: 120        // QR code size in pixels
   }
 },
 ```
@@ -155,3 +163,6 @@ config: {
 | `css` | `0` | `0` = default module CSS, `1` = `css/custom.css`. |
 | `nameTextStyle` / `contentTextStyle` | `"xsmall bright"` / `"normal dimmed"` | MagicMirror text classes for note title / body. |
 | `animationSpeed` | `2500` | Fade duration (ms) when notes change. |
+| `coloredNotes` | `false` | `true` gives every note its own text color from the [Miyazaki-16 palette](https://lospec.com/palette-list/miyazaki-16) (by skeddles), minus its three darkest colors. The color is derived from the note title, so a note keeps its color when other notes are added or deleted. |
+| `QRCode` | `false` | `true` shows a small rounded QR code above the notes. It encodes `http://<MIRROR_IP>:<port>` (plain IPv4, not `.local` - mDNS is unreliable across phone OSes), so scanning it with a phone opens the web UI. |
+| `qrCodeSize` | `120` | Width/height of the QR code in pixels. |
