@@ -6,6 +6,11 @@ node_modules/
 
 # JSON files
 *.json
+# ...but never ignore the npm manifest / lockfile, otherwise the node
+# dependencies (sqlite3, python-shell) silently disappear for everyone
+# who clones this repo and the web UI cannot start.
+!package.json
+!package-lock.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

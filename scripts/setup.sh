@@ -2,7 +2,8 @@
 #
 # MMM-FastNotes setup:
 #   1. Python virtualenv + dependencies
-#   2. (optional, needs root) advertise the web UI via DNS-SD and clean up
+#   2. Node dependencies (python-shell, sqlite3) + verify the native binding
+#   3. (optional, needs root) advertise the web UI via DNS-SD and clean up
 #      leftovers of the /etc/avahi/hosts alias approach
 #
 # The web UI itself is started by the MagicMirror node_helper, no extra
@@ -38,8 +39,42 @@ fi
 log "2. Python dependencies"
 .venv/bin/pip install -q -r requirements.txt
 
-# ---------------------------------------------------------------- 2. name
-log "3. Web UI name / DNS-SD"
+# ------------------------------------------------------------- 3. Node deps
+log "3. Node dependencies (python-shell, sqlite3)"
+if ! command -v npm >/dev/null 2>&1; then
+  warn "npm not found - cannot install the node dependencies."
+  warn "MagicMirror² requires Node.js anyway, so this is unexpected."
+  warn "Install Node.js/npm, then re-run:"
+  warn ""
+  warn "    $MODULE_DIR/scripts/setup.sh"
+  warn ""
+  exit 1
+fi
+
+# package.json sets allowScripts so sqlite3's native build is allowed to run
+# (npm >= 11 gates install scripts and would otherwise skip it silently).
+npm install --no-audit --no-fund
+
+# Verify, don't assume: a sqlite3 install without a working native binding
+# looks successful but leaves the module unable to read its notes database.
+# Failing loudly here beats a mirror that quietly shows no notes.
+if node -e "require('sqlite3')" >/dev/null 2>&1; then
+  log "   sqlite3 native binding OK"
+else
+  warn "sqlite3 installed, but its native binding did NOT load."
+  warn "Try an explicit rebuild, then verify:"
+  warn ""
+  warn "    cd $MODULE_DIR && npm rebuild sqlite3 && npm run check:sqlite"
+  warn ""
+  warn "If that fails you are likely missing build tools:"
+  warn "Debian / Raspberry Pi OS: sudo apt install build-essential python3"
+  warn "Arch / CachyOS:           sudo pacman -S base-devel python"
+  warn ""
+  exit 1
+fi
+
+# ---------------------------------------------------------------- 4. name
+log "4. Web UI name / DNS-SD"
 ROOT_OK=0
 if [ "$(id -u)" -eq 0 ]; then
   ROOT_OK=1

@@ -1,9 +1,16 @@
 Module.register("MMM-FastNotes", {
     defaults: {
-        host: "127.0.0.1",  // address of host in local network, need for access to WEB UI
+        // "0.0.0.0" listens on every interface, so the web UI is reachable at
+        // http://<MIRROR_IP>:<port> and http://<hostname>.local:<port> (mDNS)
+        // straight out of the box, from any device on your LAN. Use "127.0.0.1"
+        // to lock it to the mirror itself.
+        host: "0.0.0.0",
         port: "5000",  // port on host where UI will be accessible via web browser
         updateInterval: 5000, // request DB every N miliseconds (5 sec by default)
-        pythonPath: 'python3',  // shell command or path to Python 3.6 (or higher) binary
+        // Leave null to auto-detect: prefers the module's own .venv (created by
+        // scripts/setup.sh), then falls back to "python3". Set a path/command
+        // explicitly only if you need to override that.
+        pythonPath: null,
         css: 0,  // 0 - current default MM CSS styles; 1 - custom css stile
         // TextStyle could be "xsmall bright" or "medium bright" or another one defined in /home/pi/MagicMirror/css/main.css, or in your own custom CSS
         nameTextStyle: "xsmall bright", // style for Note Name

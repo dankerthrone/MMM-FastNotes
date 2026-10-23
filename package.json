@@ -1,0 +1,21 @@
+{
+	"name": "mmm-fastnotes",
+	"version": "1.0.0",
+	"description": "MagicMirror² module: sticky notes backed by a small Flask web UI",
+	"private": true,
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dankerthrone/MMM-FastNotes.git"
+	},
+	"scripts": {
+		"check:sqlite": "node -e \"require('sqlite3'); console.log('sqlite3 binding OK')\""
+	},
+	"allowScripts": {
+		"sqlite3": true
+	},
+	"dependencies": {
+		"python-shell": "^5.0.0",
+		"sqlite3": "^6.0.1"
+	}
+}

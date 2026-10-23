@@ -1,8 +1,26 @@
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 const net = require("net");
+const fs = require("fs");
+const path = require("path");
 const { PythonShell } = require("python-shell");
-const sqlite3 = require("sqlite3");
+
+// sqlite3 ships a native binding that npm has to build on install. Require it
+// defensively: a missing or broken binding must not take down this node_helper
+// (or the rest of MagicMirror) with an opaque "Could not locate the bindings
+// file" crash. We log an actionable fix instead and keep everything else alive.
+let sqlite3 = null;
+try {
+  sqlite3 = require("sqlite3");
+} catch (err) {
+  Log.error(
+    `[MMM-FastNotes] Could not load the sqlite3 dependency: ${err.message}\n` +
+    `[MMM-FastNotes] Fix: run "npm install" inside modules/MMM-FastNotes - this ` +
+    `builds the native sqlite3 binding (npm >= 11 gates install scripts; this ` +
+    `module's package.json already declares allowScripts for sqlite3).\n` +
+    `[MMM-FastNotes] Note display is disabled until then; the rest of MagicMirror keeps running.`
+  );
+}
 
 // Restart policy for the Flask web UI. Fast backoff for the first attempts,
 // then one quiet retry every few minutes so a real misconfiguration does not
@@ -126,9 +144,30 @@ module.exports = NodeHelper.create({
     });
   },
 
+  /*
+   * Resolve which Python binary to run the Flask backend with.
+   *
+   * Priority:
+   *   1. explicit pythonPath in config.js (user knows best)
+   *   2. the module's own .venv (created by scripts/setup.sh) - keeps the
+   *      backend isolated from the system Python, which matters on distros
+   *      with PEP 668 "externally managed" system Pythons
+   *   3. plain "python3" from PATH
+   */
+  resolvePythonPath: function () {
+    if (this.config && this.config.pythonPath) {
+      return this.config.pythonPath;
+    }
+    const venvPython = path.join(__dirname, ".venv", "bin", "python3");
+    if (fs.existsSync(venvPython)) {
+      return venvPython;
+    }
+    return "python3";
+  },
+
   spawnServer: function (host, port) {
     const options = {
-      pythonPath: this.config.pythonPath,
+      pythonPath: this.resolvePythonPath(),
       scriptPath: `${__dirname}`,
       args: [
         "--host", host,
@@ -200,6 +239,11 @@ module.exports = NodeHelper.create({
   },
 
   readDb: function () {
+    // sqlite3 failed to load at startup (see top of file) - skip quietly, the
+    // actionable fix was already logged once.
+    if (!sqlite3) {
+      return;
+    }
     let db = new sqlite3.Database(`${__dirname}/backend/database.db`, sqlite3.OPEN_READWRITE, (err) => {
       if (err) {
         Log.error(`[MMM-FastNotes] ${err.message}`);

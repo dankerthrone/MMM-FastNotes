@@ -27,18 +27,18 @@ Little speed up for screenrecord
 
 
 ### How to use
-* Clone this module repo
-* Install dependencies and requirements
-* Add module to config file
-* Restart Mirror to apply config
-* Open **host:port** provided in config.js and enjoy
+* Clone this module repo into `MagicMirror/modules`
+* Run `./scripts/setup.sh` (installs Python venv + Node deps and verifies the sqlite3 binding)
+* Add the module to your `config.js`
+* Restart the mirror
+* Open `http://<MIRROR_IP>:5000` or `http://<hostname>.local:5000` and enjoy
 
 ### Dependencies
 
 * [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror) (v2.16.0 or higher)
-* [Node.js](https://nodejs.org/) (v16 or higher) & npm
+* [Node.js](https://nodejs.org/) (v20 or higher) & npm
 * Python 3.8 or higher
-* npm packages: [python-shell](https://www.npmjs.com/package/python-shell), [sqlite3](https://www.npmjs.com/package/sqlite3)
+* Node packages (installed automatically into this module folder): [python-shell](https://www.npmjs.com/package/python-shell), [sqlite3](https://www.npmjs.com/package/sqlite3)
 
 ### Installation
 
@@ -50,45 +50,60 @@ cd ~/MagicMirror/modules
 
 Clone this module repository:
 ```markdown
-git clone https://github.com/polarbearjngl/MMM-FastNotes.git
+git clone https://github.com/dankerthrone/MMM-FastNotes.git
 cd MMM-FastNotes
-``` 
-
-Install the required node.js **python-shell** and **sqlite** dependencies
-```markdown
-npm install python-shell sqlite3
 ```
 
-#### Set up the Python environment:
+Run the setup script. It creates the Python virtualenv, installs the Python
+**and** Node dependencies, and verifies that the `sqlite3` native binding
+actually loads (a silently missing binding is the classic reason this module
+shows no notes):
 
-Create a virtual environment (avoids conflict with system Python / PEP 668): 
+```bash
+./scripts/setup.sh
 ```
+
+Want the web UI browsable as `http://<hostname>.local:5000` via DNS-SD/Avahi?
+Run it once with root so it can install the service definition:
+
+```bash
+sudo ./scripts/setup.sh
+```
+
+<details>
+<summary>Manual installation (instead of the script)</summary>
+
+Install the Node dependencies. This must be a plain `npm install` **inside the
+module folder** - it picks up the versions from `package.json`:
+
+```bash
+npm install
+```
+
+> **Why this matters:** `sqlite3` ships a native binding. Modern npm (>= 11)
+> only runs install scripts that are allow-listed, so this module's
+> `package.json` declares `allowScripts` for `sqlite3`. Without that, npm skips
+> the build silently and the mirror ends up with no notes. Verify with:
+>
+> ```bash
+> npm run check:sqlite     # should print: sqlite3 binding OK
+> ```
+>
+> If it fails, `npm rebuild sqlite3` and re-check. You may be missing build
+> tools (Debian/Raspberry Pi OS: `sudo apt install build-essential python3`,
+> Arch: `sudo pacman -S base-devel python`).
+
+Create the Python virtualenv and install the requirements:
+
+```bash
 python3 -m venv .venv
-source .venv/bin/activate
-```
-If you don't use bash, look up how to source the venv with your specific shell. However, on a typical MM you shouldn't be using anything but bash ;) 
-
-Install the Python requirements:
-
-```
-pip install -r requirements.txt 
-```
-    Important: If node_helper.js calls Python directly, update the path to use your virtual environment:
-
-    // In node_helper.js, replace "python3" with:
-    const pythonPath = __dirname + '/.venv/bin/python3';
-
-
-Leave the venv with 
-```
-deactivate
+.venv/bin/pip install -r requirements.txt
 ```
 
-Verify Python 3 (usually pre-installed):
+The `node_helper` auto-detects `.venv/bin/python3`, so no extra configuration
+is needed. (Set `pythonPath` in `config.js` only if you want to override that.)
 
-```
-python3 --version
-```
+</details>
 
 If Python 3 is missing, install it via your package manager:
 
@@ -96,6 +111,21 @@ If Python 3 is missing, install it via your package manager:
 *    Debian / Ubuntu / Raspberry Pi OS: sudo apt install python3
 *    macOS: brew install python3
 *    Windows: python.org (add to PATH during install)
+
+
+### Network & security
+
+By default the web UI listens on `0.0.0.0` (all interfaces), so any device on
+your LAN can open it:
+
+* `http://<MIRROR_IP>:5000`
+* `http://<hostname>.local:5000` (needs a running `avahi-daemon` / mDNS)
+
+**The form has no authentication.** Anyone on the same network can create,
+edit and delete notes. On a trusted home LAN that is usually fine, but be aware
+of it if your mirror is reachable beyond your LAN (port forwarding to the
+internet, or a Tailscale/WireGuard network with other members). To lock the UI
+to the mirror itself, set `host: "127.0.0.1"` in `config.js`.
 
 
 ### Configuration
@@ -106,8 +136,8 @@ module: 'MMM-FastNotes', //module name
 disabled: false,         //false if you want turn on module
 position: 'top_left',
 config: {
-    host: "192.168.1.1",  // address of raspberry pi in local network, need for access to WEB UI
-    port: 5000,           // port on host where UI will be accessible via web browser
+    host: "0.0.0.0",     // listen on all interfaces -> reachable via http://<MIRROR_IP>:5000 and http://<hostname>.local:5000. Use "127.0.0.1" to lock it to the mirror.
+    port: 5000,          // port on host where UI will be accessible via web browser
     css: 0,               // 0 - current default MM CSS styles; 1 - custom css stile
     // TextStyle could be "xsmall bright" or "medium bright" or another one defined in /home/pi/MagicMirror/css/main.css, or in your own custom CSS
     nameTextStyle: "xsmall bright", // style for Note Name
@@ -115,3 +145,13 @@ config: {
   }
 },
 ```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `host` | `"0.0.0.0"` | Interface the web UI binds to. `0.0.0.0` = reachable from any LAN device; `127.0.0.1` = mirror only. |
+| `port` | `5000` | Port of the web UI. |
+| `pythonPath` | `null` (auto) | Python binary for the backend. Auto-detects `.venv/bin/python3`, then `python3`. |
+| `updateInterval` | `5000` | How often (ms) the mirror re-reads the notes database. |
+| `css` | `0` | `0` = default module CSS, `1` = `css/custom.css`. |
+| `nameTextStyle` / `contentTextStyle` | `"xsmall bright"` / `"normal dimmed"` | MagicMirror text classes for note title / body. |
+| `animationSpeed` | `2500` | Fade duration (ms) when notes change. |
