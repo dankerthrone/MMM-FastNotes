@@ -126,6 +126,13 @@ so the UI answers on IPv4 **and** IPv6. That matters because mDNS may resolve
 `<hostname>.local` to either address family depending on the client - an
 IPv4-only bind would be unreachable for every client that got the AAAA record.
 
+**If you have an active firewall on your MagicMirror, you need to open port 5000 in order for this module to work.** Do this by 
+
+```
+sudo ufw allow 5000/tcp comment 'MMM-FastNotes WebUI'
+```
+
+
 **The form has no authentication.** Anyone on the same network can create,
 edit and delete notes. On a trusted home LAN that is usually fine, but be aware
 of it if your mirror is reachable beyond your LAN (port forwarding to the

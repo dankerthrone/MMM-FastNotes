@@ -32,20 +32,19 @@ Module.register("MMM-FastNotes", {
         //started at module loading
         this.sendSocketNotification("START_FAST_NOTES", this.config);
         this.todoList = [];
-        this.updAnimationSpeed = 0;
+        this.lastSerialized = null;
         this.webUiUrl = null;
-        this.startUpdateLoop();
+        // kein eigener Update-Timer mehr: der node_helper pollt bereits
     },
 
     socketNotificationReceived: function (notification, payload) {
-        console.log(notification);
         if (notification === "DATABASE") {
-            if (this.todoList != payload) {
+            // Inhalt vergleichen statt Referenzen - "!=" auf zwei Arrays ist immer true
+            const serialized = JSON.stringify(payload);
+            if (serialized !== this.lastSerialized) {
+                this.lastSerialized = serialized;
                 this.todoList = payload;
-                this.updAnimationSpeed = this.config.animationSpeed;
-            }
-            else{
-                this.updAnimationSpeed = 0;
+                this.updateDom(this.config.animationSpeed);   // Fade nur bei echter Aenderung
             }
         }
         if (notification === "FAST_NOTES_URL") {
